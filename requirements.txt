@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+sqlalchemy[asyncio]
+aiosqlite
+
+openai
+requests
+
+matplotlib
+networkx
