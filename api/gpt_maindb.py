@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import os, json
 from openai import OpenAI
+import logging
+logger = logging.getLogger("uvicorn.error")  # always shows up in uvicorn console
 
 from openai import OpenAI
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY") or "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")
@@ -139,9 +141,128 @@ def normalize_sidecar_dag(dag: dict) -> dict:
                 "narrative_order": e.get("narrative_order"),
             })
     return {"nodes": norm_nodes, "edges": norm_edges}
+    
+# ---------- DAG safety: cycle detection & breaking (names-based) ----------
+from collections import defaultdict
+
+def _cycles_from_edges_namepairs(edges):
+    """
+    edges: list of dicts with 'source' and 'target' (node names/strings)
+    returns: list of cycles; each cycle is a list of node names closing back to the start
+    """
+    g = defaultdict(list)
+    for e in edges:
+        s, t = str(e.get("source")), str(e.get("target"))
+        if not s or not t:
+            continue
+        g[s].append(t)
+
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color = {}
+    stack = []
+    cycles = []
+
+    def dfs(u):
+        color[u] = GRAY
+        stack.append(u)
+        for v in g.get(u, []):
+            c = color.get(v, WHITE)
+            if c == WHITE:
+                dfs(v)
+            elif c == GRAY:
+                if v in stack:
+                    i = stack.index(v)
+                    cycles.append(stack[i:] + [v])
+        stack.pop()
+        color[u] = BLACK
+
+    for node in list(g.keys()):
+        if color.get(node, WHITE) == WHITE:
+            dfs(node)
+    return cycles
+
+
+def _break_cycles_min_conf(edges):
+    """
+    Remove the lowest-confidence edge participating in a cycle, repeat until DAG.
+    If an edge lacks 'confidence', treat as 50.
+    Returns (clean_edges, removed_edges_list_of_dicts).
+    """
+    # Work on a copy so we can safely mutate
+    cur = list(edges)
+    removed = []
+
+    # Build fast lookup from (source,target) → indices (could be multiple parallel edges)
+    def _find_cycle_edges(cycles):
+        pairs = set()
+        for cyc in cycles:
+            for a, b in zip(cyc, cyc[1:]):
+                pairs.add((a, b))
+        return pairs
+
+    while True:
+        cycles = _cycles_from_edges_namepairs(cur)
+        if not cycles:
+            break
+
+        # collect all edges that lie on any cycle
+        cycle_pairs = _find_cycle_edges(cycles)
+        candidate_idxs = []
+        for i, e in enumerate(cur):
+            if (e.get("source"), e.get("target")) in cycle_pairs:
+                candidate_idxs.append(i)
+
+        # choose the lowest-confidence among candidates
+        def conf(i):
+            c = cur[i].get("confidence")
+            try:
+                return float(c) if c is not None else 50.0
+            except Exception:
+                return 50.0
+
+        victim_i = min(candidate_idxs, key=conf)
+        removed.append(cur[victim_i])
+        del cur[victim_i]
+
+    return cur, removed
+
+
+def enforce_dag_or_log(dag, remove_cycles=True):
+    """
+    Inspect dag['edges'] (names-based). If cycles exist:
+      - log them, and optionally remove the weakest edge(s) until acyclic.
+    Returns (possibly-modified dag, list_of_removed_edges).
+    """
+    edges = dag.get("edges") or []
+    cycles = _cycles_from_edges_namepairs(edges)
+    if not cycles:
+        return dag, []
+
+    logger.warning("[⚠ DAG CHECK] cycles detected: %s", cycles)
+
+    if not remove_cycles:
+        # Keep as-is, only log
+        return dag, []
+
+    cleaned, removed = _break_cycles_min_conf(edges)
+    dag = dict(dag)  # shallow copy
+    dag["edges"] = cleaned
+    logger.warning("[⚠ DAG CHECK] removed %d edge(s) to restore DAG", len(removed))
+    return dag, removed
+# --------------------------------------------------------------------------
 
 @app.post("/store_agent_text")
 async def store_agent_text(req: AgentTextRequest):
     dag = extract_entities_and_relations(req.text)
     dag = normalize_sidecar_dag(dag)
-    return {"status": "stored", "nodes": dag.get("nodes", []), "edges": dag.get("edges", [])}
+
+    # 🔎 DAG safety check (runs every time)
+    dag, removed_edges = enforce_dag_or_log(dag, remove_cycles=True)
+
+    # Optional: expose what was removed so the UI can audit
+    return {
+        "status": "stored",
+        "nodes": dag.get("nodes", []),
+        "edges": dag.get("edges", []),
+        "removed_edges": removed_edges  # <-- optional transparency for dashboard
+    }
