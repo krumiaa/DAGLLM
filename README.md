@@ -16,18 +16,6 @@ ________________
 
 * Open Reference Implementation: Lightweight, extensible, and easy to adapt for research.
 
-________________
-
-
-📂 Repository Structure
-.
-├── api/
-│   ├── db.py                # Database schema (Agent, Entity, Edge, JournalEntry)
-│   └── gpt_maindb.py        # FastAPI service for ingestion + DAG extraction
-├── create_db.py             # Initialize SQLite database
-├── send_journal_gpt_db.py   # Example script: ingest text + visualize DAG
-└── sample_journal.txt       # Example text for testing
-
 
 ________________
 
