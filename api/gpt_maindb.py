@@ -11,7 +11,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY") or "INSERT DEV KEY HERE")
 
 app = FastAPI()
 
-API_KEY = os.getenv("SOUL_MEMORY_API_KEY") or "supersecretdevkey"
+API_KEY = os.getenv("INSERT DEV KEY HERE") or "supersecretdevkey"
 
 SYSTEM_PROMPT = """
 You are a causal extraction agent. Transform unstructured text into a **causal world model (DAG)** that shows how events, emotions, goals, and strategies are connected. 
@@ -266,4 +266,5 @@ async def store_agent_text(req: AgentTextRequest):
         "edges": dag.get("edges", []),
         "removed_edges": removed_edges  # <-- optional transparency for dashboard
     }
+
 
