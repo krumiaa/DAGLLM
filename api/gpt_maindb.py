@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger("uvicorn.error")  # always shows up in uvicorn console
 
 from openai import OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY") or "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")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY") or "INSERT DEV KEY HERE")
 
 app = FastAPI()
 
@@ -266,3 +266,4 @@ async def store_agent_text(req: AgentTextRequest):
         "edges": dag.get("edges", []),
         "removed_edges": removed_edges  # <-- optional transparency for dashboard
     }
+
