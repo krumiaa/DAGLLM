@@ -2,6 +2,9 @@
 From Fuzzy Worlds to Causal Graphs
 This repository provides a minimal reference implementation of the DAG-LLM Pipeline — a method for converting unstructured text into causal directed acyclic graphs (DAGs). It demonstrates how large language models (LLMs), which encode fuzzy and probabilistic human world models, can be transformed into explicit, explainable, and structured causal graphs.
 The codebase is designed for reproducibility and research.
+
+📄 **Read the Full White Paper:**  
+[https://doi.org/10.5281/zenodo.17210060](https://doi.org/10.5281/zenodo.17210060)
 ________________
 
 
